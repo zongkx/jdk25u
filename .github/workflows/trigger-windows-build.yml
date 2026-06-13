@@ -1,0 +1,19 @@
+name: Trigger Custom Windows Build
+
+on:
+  workflow_dispatch: # 支持你在 GitHub 网页上点击按钮手动触发
+
+jobs:
+  # 直接调用官方你发现的那个文件
+  call-official-windows-build:
+    uses: ./.github/workflows/build-windows.yml # 指向官方自带的那个文件路径
+    with:
+      platform: windows-x64
+      runs-on: windows-2022
+      # 💥 关键配置：指定只编译 release 版本（如果不指定，它会把 debug 和 release 都编译一遍，耗时翻倍）
+      debug-levels: '[ "release" ]'
+      # 指定编译的目标产物为普通的 JDK/JRE 镜像包
+      make-target: 'images'
+      # 告诉官方脚本使用哪个版本的 Visual Studio 2022 编译组件
+      msvc-toolset-version: '14.38' 
+      msvc-toolset-architecture: '14.38.33130'
