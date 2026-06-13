@@ -40,11 +40,11 @@ on:
       make-target:
         required: false
         type: string
-        default: 'product-bundles' # 💥【修改点】移除 test-bundles 产物目标
+        default: 'product-bundles' # 💥【修改】移除原先的 test-bundles 目标
       debug-levels:
         required: false
         type: string
-        default: '[ "release" ]'
+        default: '[ "debug", "release" ]'
       msvc-toolset-version:
         required: true
         type: string
@@ -83,6 +83,7 @@ jobs:
           - debug-level: debug
             flags: --with-debug-level=fastdebug
             suffix: -debug
+          # 💥【修正】显式补齐 release 的矩阵 flags 参数，防止变量为空导致编译参数错误
           - debug-level: release
             flags: --with-debug-level=release
             suffix: ''
@@ -100,14 +101,7 @@ jobs:
         with:
           platform: windows-x64
 
-      # 💥【核心修正】彻底注释掉获取 JTReg 和 GTest 报错组件的步骤，不再下载测试框架
-      # - name: 'Get JTReg'
-      #   id: jtreg
-      #   uses: ./.github/actions/get-jtreg
-
-      # - name: 'Get GTest'
-      #   id: gtest
-      #   uses: ./.github/actions/get-gtest
+      # 💥【核心删减】彻底删除原先报错的 Get JTReg 和 Get GTest 步骤
 
       - name: 'Check toolchain installed'
         id: toolchain-check
@@ -130,6 +124,7 @@ jobs:
             --add Microsoft.VisualStudio.Component.VC.${{ inputs.msvc-toolset-version }}.${{ inputs.msvc-toolset-architecture }}
         if: steps.toolchain-check.outputs.toolchain-installed != 'true'
 
+      # 💥【核心修正】把已经删除的 jtreg/gtest 的路径参数从 bash configure 中安全剥离，并加入 --disable-hotspot-gtest 彻底停用测试
       - name: 'Configure'
         run: >
           bash configure
@@ -139,14 +134,12 @@ jobs:
           --with-boot-jdk=${{ steps.bootjdk.outputs.path }}
           --with-msvc-toolset-version=${{ inputs.msvc-toolset-version }}
           --with-jmod-compress=zip-1
-          --disable-tests
+          --disable-hotspot-gtest
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (
           echo "Dumping config.log:" &&
           cat config.log &&
           exit 1)
         env:
-          # We need a minimal PATH on Windows
-          # Set PATH to "", so just GITHUB_PATH is included
           PATH: ''
         shell: env /usr/bin/bash --login -eo pipefail {0}
         if: ${{ inputs.dry-run == false }}
@@ -167,7 +160,7 @@ jobs:
           debug-suffix: '${{ matrix.suffix }}'
         if: ${{ inputs.dry-run == false }}
 
-      # 擦除编译后的二进制符号表，进行安全加固
+      # 💥【追加步骤 1】将你修改后的 jvm.dll 符号表抹除（安全加固）
       - name: 'Strip JVM DLL Symbols'
         run: |
           TARGET_DLL=$(find build/*/images/jdk/bin/server/ -name "jvm.dll")
@@ -177,7 +170,7 @@ jobs:
           fi
         if: ${{ inputs.dry-run == false }}
 
-      # 强行就地重新打包编译产物目录
+      # 💥【追加步骤 2】就地把编译出的完整绿色 JDK 目录压缩成标准的 ZIP 格式
       - name: 'Force Zip Custom JDK'
         run: |
           cd build/*/images
@@ -185,7 +178,7 @@ jobs:
           echo "==== 定制 Windows JDK 压缩完成 ===="
         if: ${{ inputs.dry-run == false }}
 
-      # 强行将其推送到 Actions 首页最下方供用户下载
+      # 💥【追加步骤 3】使用 GitHub 官方通用的 upload-artifact 动作把压缩包吐到首页最下方供你下载
       - name: 'Force Upload JDK to Artifacts'
         uses: actions/upload-artifact@v4
         with:
