@@ -1,83 +1,15 @@
-name: Manual Build Custom Windows JDK
+name: Trigger Custom Windows Build
 
 on:
-  workflow_dispatch: # 在 GitHub 网页上手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
-  build-windows:
-    runs-on: windows-2022
-
-    defaults:
-      run:
-        shell: bash # 全局强制使用 Bash 环境运行
-
-    steps:
-      # 1. 签出你魔改后的仓库代码
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      # 2. 安装配置 Cygwin 环境（补齐了编译必需的 autoconf 和 unzip）
-      - name: Set up Cygwin
-        uses: egor-tensin/setup-cygwin@v4
-        with:
-          platform: x64
-          packages: make zip unzip git autoconf
-
-      # 3. 安装配置编译所需的 Windows 依赖（BootJDK 24）
-      - name: Setup Boot JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '24'
-
-      # 4. 💥【硬核扫雷：注入微软 MSVC 编译器变量】
-      # 这一步通过 cmd 激活微软官方的 C++ 编译环境，并将它们转换为 Bash 能够识别的全局环境变量
-      - name: Initialize MSVC Toolchain Variables
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          set >> "%GITHUB_ENV%"
-
-      # 5. 配置 OpenJDK 构建参数
-      - name: Configure OpenJDK
-        run: |
-          BOOT_JDK_PATH=$(cygpath -u "$JAVA_HOME")
-          bash configure \
-            --with-debug-level=release \
-            --with-jvm-variants=server \
-            --with-boot-jdk="$BOOT_JDK_PATH" \
-            --openjdk-target=x86_64-unknown-cygwin || ( \
-              echo "==== 编译配置失败，倾倒错误日志 config.log ====" && \
-              cat config.log && \
-              exit 1 \
-            )
-
-      # 6. 执行编译（这步会把你的 C++ 魔改代码强行编译进 jvm.dll）
-      - name: Run Make
-        run: |
-          make images
-
-      # 7. 抹除调试符号（让 IDA Pro / x64dbg 逆向难度暴增）
-      - name: Strip Binary Symbols
-        run: |
-          TARGET_DLL=$(find build/*/images/jdk/bin/server/ -name "jvm.dll")
-          if [ -f "$TARGET_DLL" ]; then
-            strip "$TARGET_DLL"
-            echo "==== jvm.dll 符号抹除成功 ===="
-          fi
-
-      # 8. 自己动手强行打包 JDK 镜像
-      - name: Package Windows JDK
-        run: |
-          # 寻找真实的编译产物目录
-          cd build/*/images
-          zip -r ../../../my-custom-jdk-windows.zip jdk
-          echo "==== 专属 Windows JDK 打包成功 ===="
-
-      # 9. 将打包好的 ZIP 强行吐到 GitHub Actions 首页最下方
-      - name: Upload To Homepage Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: my-custom-jdk-windows-x64
-          path: my-custom-jdk-windows.zip
-          retention-days: 7
+  call-official-windows-build:
+    uses: ./.github/workflows/build-windows.yml # 触发你刚刚改好的这个文件
+    with:
+      platform: windows-x64
+      runs-on: windows-2022
+      debug-levels: '[ "release" ]' # 💥 强行指定只跑 release 矩阵，不编译 debug，省下一半的时间
+      make-target: 'images'          # 💥 告诉底层编译引擎，我们需要全量的生成标准 JDK 镜像目录
+      msvc-toolset-version: '14.38' 
+      msvc-toolset-architecture: '14.38.33130'
