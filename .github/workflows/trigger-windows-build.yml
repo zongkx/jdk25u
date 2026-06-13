@@ -5,11 +5,11 @@ on:
 
 jobs:
   call-official-windows-build:
-    uses: ./.github/workflows/build-windows.yml # 触发你刚刚改好的这个文件
+    uses: ./.github/workflows/build-windows.yml 
     with:
       platform: windows-x64
       runs-on: windows-2022
-      debug-levels: '[ "release" ]' # 💥 强行指定只跑 release 矩阵，不编译 debug，省下一半的时间
-      make-target: 'images'          # 💥 告诉底层编译引擎，我们需要全量的生成标准 JDK 镜像目录
+      debug-levels: '[ "release" ]'
+      make-target: 'images' # 💥 强行指定只编译普通的 JDK 绿色镜像，不要带测试集
       msvc-toolset-version: '14.38' 
       msvc-toolset-architecture: '14.38.33130'
