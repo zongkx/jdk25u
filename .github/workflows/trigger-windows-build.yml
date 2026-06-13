@@ -33,27 +33,34 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           set >> "%GITHUB_ENV%"
 
-      # 5. 执行 OpenJDK 的环境配置（加入抗 Windows 回车符干扰逻辑）
+      # 5. 执行 OpenJDK 的环境配置（平铺数组版，彻底免疫 Windows \r 换行符断裂干扰）
       - name: OpenJDK Configure
         shell: bash
         run: |
-          # 强行修复可能存在的 Windows 换行符问题
           set -e
           
           # 转换为 Cygwin 兼容的绝对路径
           BOOT_JDK_PATH=$(cygpath -u "$JAVA_HOME")
+          echo "==== 当前使用的 Boot JDK 路径为: $BOOT_JDK_PATH ===="
           
-          # 执行最纯粹的配置，显式剔除单元测试模块（--disable-hotspot-gtest）
-          # 注意：通过使用单行或者确保参数连续性防止 \r 报错
-          bash configure \
-            --with-debug-level=release \
-            --with-jvm-variants=server \
-            --with-boot-jdk="$BOOT_JDK_PATH" \
-            --openjdk-target=x86_64-unknown-cygwin \
-            --disable-hotspot-gtest || ( \
-              if [ -f config.log ]; then echo "==== 倾倒配置错误日志 config.log ====" && cat config.log; fi && \
-              exit 1 \
-            )
+          # 使用 Bash 数组包裹参数，彻底废弃反斜杠折行，防止 \r 导致命令断裂
+          CONF_ARGS=(
+            --with-debug-level=release
+            --with-jvm-variants=server
+            --with-boot-jdk="$BOOT_JDK_PATH"
+            --openjdk-target=x86_64-unknown-cygwin
+            --disable-hotspot-gtest
+          )
+          
+          # 运行配置脚本
+          bash configure "${CONF_ARGS[@]}" || {
+            echo "==== 编译配置失败 ===="
+            if [ -f config.log ]; then 
+              echo "==== 倾倒配置错误日志 config.log ===="
+              cat config.log
+            fi
+            exit 1
+          }
 
       # 6. 开始核心编译（只编译核心镜像，不编译测试套件）
       - name: Run Make Images
@@ -79,10 +86,10 @@ jobs:
           zip -r ../../../my-custom-jdk-windows-x64.zip jdk
           echo "==== 专属加固版 Windows JDK 压缩成功 ===="
 
-      # 9. 使用标准的 GitHub Action 把 ZIP 吐到首页最下方
+      # 9. 使用标准的 GitHub Action 把 ZIP 吐到首页最下方（已修正 path 名字的一致性）
       - name: Upload JDK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: my-custom-jdk-windows-x64
-          path: my-custom-jdk-windows.zip
+          path: my-custom-jdk-windows-x64.zip
           retention-days: 7
