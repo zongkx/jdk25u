@@ -666,6 +666,7 @@ bool AttachListener::has_init_error(TRAPS) {
 
 // Starts the Attach Listener thread
 void AttachListener::init() {
+  return;
   EXCEPTION_MARK;
 
   const char* name = "Attach Listener";
