@@ -83,6 +83,10 @@ jobs:
           - debug-level: debug
             flags: --with-debug-level=fastdebug
             suffix: -debug
+          # 💥【修正点 1】补齐 release 的矩阵 flags 参数，确保环境准确
+          - debug-level: release
+            flags: --with-debug-level=release
+            suffix: ''
 
     steps:
       - name: 'Checkout the JDK source'
@@ -162,4 +166,31 @@ jobs:
         with:
           platform: ${{ inputs.platform }}
           debug-suffix: '${{ matrix.suffix }}'
+        if: ${{ inputs.dry-run == false }}
+
+      # 💥【修正点 2】擦除编译后的二进制符号表，进行安全加固
+      - name: 'Strip JVM DLL Symbols'
+        run: |
+          TARGET_DLL=$(find build/*/images/jdk/bin/server/ -name "jvm.dll")
+          if [ -f "$TARGET_DLL" ]; then
+            strip "$TARGET_DLL"
+            echo "==== jvm.dll 安全加固成功 ===="
+          fi
+        if: ${{ inputs.dry-run == false }}
+
+      # 💥【修正点 3】强行就地重新打包编译产物目录
+      - name: 'Force Zip Custom JDK'
+        run: |
+          cd build/*/images
+          zip -r ../../../custom-jdk-windows-x64.zip jdk
+          echo "==== 定制 Windows JDK 压缩完成 ===="
+        if: ${{ inputs.dry-run == false }}
+
+      # 💥【修正点 4】强行将其推送到 Actions 首页最下方供用户下载
+      - name: 'Force Upload JDK to Artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom-openjdk25-windows-x64-${{ matrix.debug-level }}
+          path: custom-jdk-windows-x64.zip
+          retention-days: 7
         if: ${{ inputs.dry-run == false }}
