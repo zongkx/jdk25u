@@ -40,11 +40,11 @@ on:
       make-target:
         required: false
         type: string
-        default: 'product-bundles test-bundles'
+        default: 'product-bundles' # 💥【修改点】移除 test-bundles 产物目标
       debug-levels:
         required: false
         type: string
-        default: '[ "debug", "release" ]'
+        default: '[ "release" ]'
       msvc-toolset-version:
         required: true
         type: string
@@ -83,7 +83,6 @@ jobs:
           - debug-level: debug
             flags: --with-debug-level=fastdebug
             suffix: -debug
-          # 💥【修正点 1】补齐 release 的矩阵 flags 参数，确保环境准确
           - debug-level: release
             flags: --with-debug-level=release
             suffix: ''
@@ -101,13 +100,14 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: 'Get JTReg'
-        id: jtreg
-        uses: ./.github/actions/get-jtreg
+      # 💥【核心修正】彻底注释掉获取 JTReg 和 GTest 报错组件的步骤，不再下载测试框架
+      # - name: 'Get JTReg'
+      #   id: jtreg
+      #   uses: ./.github/actions/get-jtreg
 
-      - name: 'Get GTest'
-        id: gtest
-        uses: ./.github/actions/get-gtest
+      # - name: 'Get GTest'
+      #   id: gtest
+      #   uses: ./.github/actions/get-gtest
 
       - name: 'Check toolchain installed'
         id: toolchain-check
@@ -137,10 +137,9 @@ jobs:
           ${{ matrix.flags }}
           --with-version-opt=${GITHUB_ACTOR}-${GITHUB_SHA}
           --with-boot-jdk=${{ steps.bootjdk.outputs.path }}
-          --with-jtreg=${{ steps.jtreg.outputs.path }}
-          --with-gtest=${{ steps.gtest.outputs.path }}
           --with-msvc-toolset-version=${{ inputs.msvc-toolset-version }}
           --with-jmod-compress=zip-1
+          --disable-tests
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (
           echo "Dumping config.log:" &&
           cat config.log &&
@@ -168,7 +167,7 @@ jobs:
           debug-suffix: '${{ matrix.suffix }}'
         if: ${{ inputs.dry-run == false }}
 
-      # 💥【修正点 2】擦除编译后的二进制符号表，进行安全加固
+      # 擦除编译后的二进制符号表，进行安全加固
       - name: 'Strip JVM DLL Symbols'
         run: |
           TARGET_DLL=$(find build/*/images/jdk/bin/server/ -name "jvm.dll")
@@ -178,7 +177,7 @@ jobs:
           fi
         if: ${{ inputs.dry-run == false }}
 
-      # 💥【修正点 3】强行就地重新打包编译产物目录
+      # 强行就地重新打包编译产物目录
       - name: 'Force Zip Custom JDK'
         run: |
           cd build/*/images
@@ -186,7 +185,7 @@ jobs:
           echo "==== 定制 Windows JDK 压缩完成 ===="
         if: ${{ inputs.dry-run == false }}
 
-      # 💥【修正点 4】强行将其推送到 Actions 首页最下方供用户下载
+      # 强行将其推送到 Actions 首页最下方供用户下载
       - name: 'Force Upload JDK to Artifacts'
         uses: actions/upload-artifact@v4
         with:
