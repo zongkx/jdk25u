@@ -1,76 +1,15 @@
-name: Pure Windows OpenJDK Build
+name: Trigger Custom Windows Build
 
 on:
-  workflow_dispatch: # 支持手动点击按钮触发
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-2022
-
-    steps:
-      # 1. 签出本地仓库代码
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      # 2. 搭建 Cygwin 环境并装齐所有构建依赖
-      - name: Set up Cygwin
-        uses: egor-tensin/setup-cygwin@v4
-        with:
-          platform: x64
-          packages: make zip unzip git autoconf
-
-      # 3. 配置 Boot JDK (引导 JDK 24)
-      - name: Setup Boot JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '24'
-
-      # 4. 激活微软 VS2022 的 C++ 编译工具链（使用 cmd 规避换行符）
-      - name: Initialize MSVC Compiler
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          set >> "%GITHUB_ENV%"
-
-      # 5. 💥【根治换行符地雷】执行环境配置
-      # 显式指定 igncr 参数（Ignore CR），强行命令 Bash 核心彻底忽略所有换行符末尾的 \r
-      - name: OpenJDK Configure
-        shell: bash {0}
-        run: |
-          #BASH_ENV_IGNCR=1
-          export SHELLOPTS
-          set -e
-          
-          BOOT_JDK_PATH=$(cygpath -u "$JAVA_HOME")
-          
-          bash configure --with-debug-level=release --with-jvm-variants=server --with-boot-jdk="$BOOT_JDK_PATH" --openjdk-target=x86_64-unknown-cygwin --disable-hotspot-gtest
-
-
-      # 6. 开始核心编译（单行命令，绝无折行隐患）
-      - name: Run Make Images
-        shell: bash {0}
-        run: |
-          make images
-
-      # 7. 符号表擦除（加固你的 custom jvm.dll）
-      - name: Strip JVM Symbols
-        shell: bash {0}
-        run: |
-          TARGET_DLL=$(find build/*/images/jdk/bin/server/ -name "jvm.dll")
-          if [ -f "$TARGET_DLL" ]; then strip "$TARGET_DLL"; fi
-
-      # 8. 强行就地打包最终生成的编译产物
-      - name: Zip Result JDK
-        shell: bash {0}
-        run: |
-          cd build/*/images
-          zip -r ../../../my-custom-jdk-windows-x64.zip jdk
-
-      # 9. 将 ZIP 吐到首页最下方供下载
-      - name: Upload JDK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: my-custom-jdk-windows-x64
-          path: my-custom-jdk-windows-x64.zip
-          retention-days: 7
+  call-official-windows-build:
+    uses: ./.github/workflows/build-windows.yml # 触发刚才改好的这份官方规范文件
+    with:
+      platform: windows-x64
+      runs-on: windows-2022
+      debug-levels: '[ "release" ]'  # 强行只跑 release，不编译 debug 节省一半时间
+      make-target: 'images'           # 💥 关键：目标必须填 images，代表只编译干净的绿色 JDK 包
+      msvc-toolset-version: '14.38' 
+      msvc-toolset-architecture: '14.38.33130'
