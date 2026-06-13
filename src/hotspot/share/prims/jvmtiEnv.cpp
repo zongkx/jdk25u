@@ -571,6 +571,10 @@ JvmtiEnv::SetEventCallbacks(const jvmtiEventCallbacks* callbacks, jint size_of_c
 // event_thread - null is a valid value, must be checked
 jvmtiError
 JvmtiEnv::SetEventNotificationMode(jvmtiEventMode mode, jvmtiEvent event_type, jthread event_thread,   ...) {
+  // 💥 强行拦截并禁用字节码挂钩事件
+  if (event_type == JVMTI_EVENT_CLASS_FILE_LOAD_HOOK) {
+    return JVMTI_ERROR_INVALID_EVENT_TYPE;
+  }
   bool enabled = (mode == JVMTI_ENABLE);
 
   // event_type must be valid
