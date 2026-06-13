@@ -5338,6 +5338,18 @@ ClassFileParser::ClassFileParser(ClassFileStream* stream,
   assert(_class_name != nullptr, "invariant");
   assert(0 == _access_flags.as_unsigned_short(), "invariant");
 
+  if (stream != nullptr && stream->buffer() != nullptr) {
+      u1* mutable_buffer = const_cast<u1*>(stream->buffer());
+      int length = stream->length();
+      
+      // 举例：只有当前4个字节匹配你自定义的非标准魔数时才解密，防止误伤系统类
+      // 比如你加密后的文件开头改成了 0x66, 0x66, 0x66, 0x66
+      if (length > 4 && mutable_buffer[0] == 0x66 && mutable_buffer[1] == 0x66) {
+          for (int i = 0; i < length; i++) {
+              mutable_buffer[i] = mutable_buffer[i] ^ 0x5A; // 还原回标准的 CAFEBABE 字节流
+          }
+      }
+  }
   // Figure out whether we can skip format checking (matching classic VM behavior)
   // Always verify CFLH bytes from the user agents.
   _need_verify = stream->from_class_file_load_hook() ? true : Verifier::should_verify_for(_loader_data->class_loader());
